@@ -1,0 +1,38 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Model checkpoints & weights
+*.pt
+*.pth
+*.bin
+*.ckpt
+*.safetensors
+
+# Demo cache (large files, logs, embeddings)
+.demo_cache/
+
+# Data files
+gr/gr_train.json
+
+# Logs
+logs/
+runs/
+*.log
+tf_events/
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

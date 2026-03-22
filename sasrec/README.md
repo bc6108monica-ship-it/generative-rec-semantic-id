@@ -1,0 +1,1 @@
+本文件夹是腾讯广告算法大赛给的baseline版本sasrec，我利用此文件夹中的model.py第401行的save_item_emb函数来融合赛题所给的多模态信息产出item的embedding用于后续码本的构建。
