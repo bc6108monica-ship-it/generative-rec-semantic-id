@@ -1,21 +1,34 @@
 # 用于解析命令行参数
 import argparse
+# 用于生成随机数
 import random
+# PyTorch深度学习框架
 import torch
+# NumPy数值计算库，用于数组操作
 import numpy as np
+# PyTorch分布式训练支持
 import torch.distributed as dist
+# 数据加载器，用于批量加载数据
 from torch.utils.data import DataLoader
 
+# RQVAE模型定义
 from rqvae_model import RQVAE
+# 训练器，包含训练循环和评估逻辑
 from trainer import  Trainer
+# 实用函数集合，包括日志、指标计算等，这个*是通配符导入，表示都导进来了
 from utils import *
+# PyTorch多进程支持，用于分布式训练
 import torch.multiprocessing as mp
+# 分布式数据加载器和采样器，用于多GPU训练
 from torch.utils.data import DataLoader, DistributedSampler
+# 分布式数据并行模块，用于多GPU模型并行
 from torch.nn.parallel import DistributedDataParallel as DDP
+# 自定义数据集类，用于加载.npz格式的数据文件
 from datasets import CustomNpzFile
 def cleanup():
     dist.destroy_process_group()
 def parse_args():
+    #命令行参数解析器
     parser = argparse.ArgumentParser(description="Index")
 
     parser.add_argument('--lr', type=float, default=3e-4, help='learning rate')
