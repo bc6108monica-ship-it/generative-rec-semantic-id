@@ -43,7 +43,7 @@ class MyDataset(torch.utils.data.Dataset):
         self.mm_emb_ids = args.mm_emb_id
 
         self.item_feat_dict = json.load(open(Path(data_dir, "item_feat_dict.json"), 'r'))
-        self.mm_emb_dict = load_mm_emb(Path(data_dir, "creative_emb"), self.mm_emb_ids)
+        self.mm_emb_dict = load_mm_emb(Path(data_dir, "creative_emb"), self.mm_emb_ids, normalize=True)
         with open(self.data_dir / 'indexer.pkl', 'rb') as ff:
             indexer = pickle.load(ff)
             self.itemnum = len(indexer['i'])
@@ -436,39 +436,148 @@ def save_emb(emb, save_path):
         emb.tofile(f)
 
 
-def load_mm_emb(mm_path, feat_ids):
+def load_mm_emb(mm_path, feat_ids, normalize=True):
     """
     加载多模态特征Embedding
 
     Args:
         mm_path: 多模态特征Embedding路径
         feat_ids: 要加载的多模态特征ID列表
+        normalize: 是否进行z-score标准化
 
     Returns:
         mm_emb_dict: 多模态特征Embedding字典，key为特征ID，value为特征Embedding字典（key为item ID，value为Embedding）
     """
     SHAPE_DICT = {"81": 32, "82": 1024, "83": 3584, "84": 4096, "85": 3584, "86": 3584}
     mm_emb_dict = {}
+
     for feat_id in tqdm(feat_ids, desc='Loading mm_emb'):
         shape = SHAPE_DICT[feat_id]
         emb_dict = {}
-        if feat_id != '81':
-            try:
-                base_path = Path(mm_path, f'emb_{feat_id}_{shape}')
-                for json_file in base_path.glob('*.json'):
-                    with open(json_file, 'r', encoding='utf-8') as file:
-                        for line in file:
-                            data_dict_origin = json.loads(line.strip())
-                            insert_emb = data_dict_origin['emb']
-                            if isinstance(insert_emb, list):
-                                insert_emb = np.array(insert_emb, dtype=np.float32)
-                            data_dict = {data_dict_origin['anonymous_cid']: insert_emb}
-                            emb_dict.update(data_dict)
-            except Exception as e:
-                print(f"transfer error: {e}")
-        if feat_id == '81':
-            with open(Path(mm_path, f'emb_{feat_id}_{shape}.pkl'), 'rb') as f:
-                emb_dict = pickle.load(f)
-        mm_emb_dict[feat_id] = emb_dict
-        print(f'Loaded #{feat_id} mm_emb')
+        loaded_count = 0
+        error_count = 0
+
+        # 用于标准化的统计量
+        all_values = [] if normalize else None
+
+        # 1. 首先尝试从目录读取（适用于所有特征）
+        base_path = Path(mm_path, f'emb_{feat_id}_{shape}')
+
+        # 处理85特征的不一致：代码中是3584，目录名可能是4096
+        if not base_path.exists() and feat_id == '85':
+            # 尝试查找实际的目录名
+            possible_paths = list(mm_path.glob(f'emb_{feat_id}_*'))
+            if possible_paths:
+                base_path = possible_paths[0]
+                print(f"注意: 特征 #{feat_id} 使用实际目录 {base_path.name}，而非代码中的维度 {shape}")
+
+        if base_path.exists() and base_path.is_dir():
+            # 查找part-*文件（无扩展名）或*.json文件
+            part_files = list(base_path.glob('part-*'))
+            if not part_files:
+                part_files = list(base_path.glob('*.json'))
+
+            if not part_files:
+                print(f"警告: 特征 #{feat_id} 目录 {base_path} 中没有找到part-*或*.json文件")
+            else:
+                for part_file in sorted(part_files):
+                    try:
+                        with open(part_file, 'r', encoding='utf-8') as file:
+                            line_num = 0
+                            for line in file:
+                                line_num += 1
+                                line = line.strip()
+                                if not line:  # 跳过空行
+                                    continue
+
+                                try:
+                                    data = json.loads(line)
+                                except json.JSONDecodeError as e:
+                                    print(f"JSON解析错误 {part_file}:{line_num}: {e}")
+                                    error_count += 1
+                                    continue
+
+                                # 检查必需的键
+                                if 'anonymous_cid' not in data:
+                                    print(f"缺少键 'anonymous_cid' {part_file}:{line_num}")
+                                    error_count += 1
+                                    continue
+
+                                if 'emb' not in data:
+                                    print(f"缺少键 'emb' {part_file}:{line_num}")
+                                    error_count += 1
+                                    continue
+
+                                anonymous_cid = data['anonymous_cid']
+                                emb_array = data['emb']
+
+                                # 确保emb是numpy数组
+                                if isinstance(emb_array, list):
+                                    emb_array = np.array(emb_array, dtype=np.float32)
+                                elif not isinstance(emb_array, np.ndarray):
+                                    print(f"emb格式错误 {part_file}:{line_num}: 期望list或ndarray，得到{type(emb_array)}")
+                                    error_count += 1
+                                    continue
+
+                                emb_dict[anonymous_cid] = emb_array
+                                if normalize and all_values is not None:
+                                    all_values.append(emb_array)
+                                loaded_count += 1
+
+                    except Exception as e:
+                        print(f"读取文件 {part_file} 错误: {e}")
+                        error_count += 1
+
+        # 2. 如果目录方式失败，尝试pickle文件（向后兼容，特别是对于81特征）
+        if not emb_dict and feat_id == '81':
+            pkl_path = Path(mm_path, f'emb_{feat_id}_{shape}.pkl')
+            if pkl_path.exists():
+                try:
+                    with open(pkl_path, 'rb') as f:
+                        emb_dict = pickle.load(f)
+                    print(f"✅ Loaded #{feat_id} mm_emb from pickle: {len(emb_dict)} items")
+                    # 收集pickle文件中的值用于标准化
+                    if normalize and all_values is not None:
+                        for emb_array in emb_dict.values():
+                            if isinstance(emb_array, np.ndarray):
+                                all_values.append(emb_array)
+                            elif isinstance(emb_array, list):
+                                all_values.append(np.array(emb_array, dtype=np.float32))
+                except Exception as e:
+                    print(f"读取pickle文件 {pkl_path} 错误: {e}")
+                    error_count += 1
+
+        # 3. 检查是否成功加载
+        if emb_dict:
+            # 如果需要标准化，对特征进行z-score标准化
+            if normalize and all_values and len(all_values) > 0:
+                try:
+                    # 计算均值和标准差
+                    all_arrays = np.vstack(all_values)
+                    mean = np.mean(all_arrays, axis=0)
+                    std = np.std(all_arrays, axis=0)
+                    # 避免除以0，将std小于1e-8的位置设为1
+                    std[std < 1e-8] = 1.0
+
+                    # 标准化emb_dict中的所有值
+                    standardized_count = 0
+                    for key, value in emb_dict.items():
+                        if isinstance(value, np.ndarray):
+                            emb_dict[key] = (value - mean) / std
+                            standardized_count += 1
+                        elif isinstance(value, list):
+                            emb_dict[key] = ((np.array(value, dtype=np.float32) - mean) / std).tolist()
+                            standardized_count += 1
+
+                    print(f'  标准化特征 #{feat_id}: {standardized_count}个向量 (均值={mean.mean():.4f}, 标准差={std.mean():.4f})')
+                except Exception as e:
+                    print(f'  标准化特征 #{feat_id} 时出错: {e}')
+
+            mm_emb_dict[feat_id] = emb_dict
+            print(f'✅ Loaded #{feat_id} mm_emb: {loaded_count} items' +
+                  (f' (跳过 {error_count} 个错误行)' if error_count > 0 else ''))
+        else:
+            print(f'❌ 无法加载特征 #{feat_id}，请检查数据文件')
+            mm_emb_dict[feat_id] = {}
+
     return mm_emb_dict
