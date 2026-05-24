@@ -38,6 +38,9 @@ env/
 .idea/
 *.swp
 
+# Resume
+ds_resume.md
+
 # OS
 .DS_Store
 Thumbs.db

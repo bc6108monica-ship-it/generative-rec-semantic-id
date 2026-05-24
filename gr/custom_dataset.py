@@ -63,12 +63,15 @@ class CustomTrainDataset(IterableDataset):
             return None
         
         for i in range(len(user_behavior_list)-1, -1, -1):
+            #因为时效性，所以从后往前看
+            #item2token_dict是key：物品ID，value：token_id的字典
             item = str(user_behavior_list[i])
             if item in self.item2token_dict:
                 target_item = item
                 break
         
         if not target_item:
+            #用户完全可能和没有语义 ID 的冷启动/长尾/新物品交互过，
             return None
         
         input_user_behavior_list = []
