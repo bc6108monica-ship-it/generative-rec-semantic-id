@@ -44,3 +44,10 @@ ds_resume.md
 # OS
 .DS_Store
 Thumbs.db
+
+#写的prompt
+question.txt
+question2.txt
+resume_prompt.md 
+SKILL.md
+resume.txt

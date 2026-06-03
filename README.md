@@ -34,14 +34,14 @@ graph LR
 
 ### Step 2｜层次化语义 ID 构建（rqvae/）
 - 引入 **RQ-VAE（Residual Quantized VAE）** 进行向量量化
-- 将 Item 稠密向量映射为 3~4 层深度的**层次化 Semantic ID**
+- 将 Item 稠密向量映射为 3 层深度的**层次化 Semantic ID**
 - 构建紧凑 Codebook，将海量商品压缩至有限 Token 空间
 - 使 LLM 能够直接处理推荐数据，无需专用 ID Embedding 表
 
 ### Step 3｜生成式预训练与微调（gr/）
 - 基于 **Qwen2** 底座模型搭建生成式推荐 Pipeline
 - 设计流式数据加载器（IterableDataset），将用户历史交互转化为 Semantic ID 序列
-- 采用 **Next Item Prediction** 任务进行 **SFT（监督微调）**
+- 采用 **Next Item Prediction** 任务进行生成式预测
 - 使用 **DeepSpeed** 分布式训练优化，支持大规模数据训练
 
 ## 技术栈
@@ -49,8 +49,7 @@ graph LR
 |------|------|
 | 序列建模 | SASRec, Transformer |
 | 向量量化 | RQ-VAE |
-| 生成模型 | Qwen2, SFT |
-| 训练优化 | DeepSpeed |
+| 生成模型 | Qwen2 |
 | 框架 | Python, PyTorch |
 
 ## 快速开始
