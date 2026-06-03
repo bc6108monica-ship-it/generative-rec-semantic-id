@@ -42,7 +42,7 @@ graph LR
 - 基于 **Qwen2** 底座模型搭建生成式推荐 Pipeline
 - 设计流式数据加载器（IterableDataset），将用户历史交互转化为 Semantic ID 序列
 - 采用 **Next Item Prediction** 任务进行生成式预测
-- 使用 **DeepSpeed** 分布式训练优化，支持大规模数据训练
+- 使用 **DeepSpeed** 分布式训练优化，支持大规模数据训练(ing阶段)
 
 ## 技术栈
 | 模块 | 技术 |
